@@ -1,13 +1,14 @@
 from flask import Flask, request
 from werkzeug.utils import secure_filename
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# 200 MB
+# Permitir hasta 200 MB
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
 
 
@@ -16,12 +17,12 @@ def index():
     return """
 Servidor HTTP funcionando.<br><br>
 
-DL:
+<h3>Download</h3>
 https://drivetest-upload.onrender.com/test15mb.bin
 
 <br><br>
 
-UL:
+<h3>Upload</h3>
 https://drivetest-upload.onrender.com/upload
 """
 
@@ -29,69 +30,97 @@ https://drivetest-upload.onrender.com/upload
 @app.route("/upload", methods=["POST"])
 def upload():
 
-    print("=" * 60)
+    print("\n" + "=" * 70)
     print("NUEVA PETICION")
-    print("=" * 60)
+    print("=" * 70)
 
-    print("Headers:")
-    for h in request.headers:
-        print(h)
+    print("\nHEADERS")
+    for k, v in request.headers.items():
+        print(f"{k}: {v}")
 
-    print()
+    print("\nContent-Length:", request.content_length)
+    print("Content-Type :", request.content_type)
 
-    print("Content-Length:", request.content_length)
-    print("Content-Type:", request.content_type)
-
-    print()
-
-    print("FILES:")
+    print("\nFILES ------------------------------")
     print(request.files)
 
-    print()
+    if len(request.files) > 0:
 
-    print("FORM:")
+        for campo in request.files:
+
+            archivo = request.files[campo]
+
+            print("--------------------------------")
+            print("Campo      :", campo)
+            print("Nombre     :", archivo.filename)
+            print("Tipo       :", archivo.content_type)
+
+            nombre = secure_filename(archivo.filename)
+
+            if nombre == "":
+                nombre = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.bin"
+
+            ruta = os.path.join(UPLOAD_FOLDER, nombre)
+
+            archivo.save(ruta)
+
+            print("Guardado en:", ruta)
+            print("Tamaño:", os.path.getsize(ruta), "bytes")
+
+    else:
+        print("No hay archivos en request.files")
+
+    print("\nFORM -------------------------------")
     print(request.form)
 
-    print()
+    print("\nVALUES -----------------------------")
+    print(request.values)
 
-    if request.files:
+    print("\nRAW DATA ---------------------------")
 
-        for key in request.files:
+    raw = request.get_data(cache=True)
 
-            f = request.files[key]
+    print("Bytes RAW:", len(raw))
 
-            print("Campo:", key)
-            print("Nombre:", f.filename)
-            print("Tipo:", f.content_type)
+    if len(raw) > 0:
 
-            filename = secure_filename(f.filename)
+        nombre = f"raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.bin"
 
-            f.save(os.path.join(UPLOAD_FOLDER, filename))
+        ruta = os.path.join(UPLOAD_FOLDER, nombre)
 
-            print("Guardado:", filename)
+        with open(ruta, "wb") as f:
+            f.write(raw)
 
-        return "UPLOAD OK", 200
+        print("RAW guardado en:", ruta)
 
-    data = request.get_data()
+    else:
+        print("No hay datos RAW")
 
-    print("RAW DATA SIZE:", len(data))
+    print("\nFINALIZADO")
+    print("=" * 70)
 
-    with open("uploads/raw_upload.bin", "wb") as f:
-        f.write(data)
-
-    print("RAW DATA GUARDADA")
-
-    return "RAW OK", 200
+    # Siempre responder OK
+    return "OK", 200
 
 
 @app.errorhandler(413)
-def too_large(e):
+def error_413(e):
 
-    print("ERROR 413")
+    print("\n******** ERROR 413 ********")
     print("Content-Length:", request.content_length)
 
-    return "Archivo demasiado grande", 413
+    return "413", 413
+
+
+@app.errorhandler(Exception)
+def error_general(e):
+
+    print("\n******** ERROR GENERAL ********")
+    print(type(e))
+    print(e)
+
+    return "ERROR", 500
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=10000)
